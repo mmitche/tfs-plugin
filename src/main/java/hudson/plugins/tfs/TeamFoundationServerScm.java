@@ -5,7 +5,10 @@ import static hudson.Util.fixEmpty;
 import java.io.File;
 import java.io.IOException;
 import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -76,6 +79,7 @@ public class TeamFoundationServerScm extends SCM {
 
     private final String serverUrl;
     private final String projectPath;
+    private final Collection<String> cloakPaths;
     private final String localPath;
     private final String workspaceName;
     private @Deprecated String userPassword;
@@ -91,12 +95,12 @@ public class TeamFoundationServerScm extends SCM {
     private static final Logger logger = Logger.getLogger(TeamFoundationServerScm.class.getName());
 
     @Deprecated
-    public TeamFoundationServerScm(String serverUrl, String projectPath, String localPath, boolean useUpdate, String workspaceName, String userName, String password) {
-        this(serverUrl, projectPath, localPath, useUpdate, workspaceName, userName, Secret.fromString(password));
+    public TeamFoundationServerScm(String serverUrl, String projectPath, String cloakPaths, String localPath, boolean useUpdate, String workspaceName, String userName, String password) {
+        this(serverUrl, projectPath, cloakPaths, localPath, useUpdate, workspaceName, userName, Secret.fromString(password));
     }
 
     @DataBoundConstructor
-    public TeamFoundationServerScm(String serverUrl, String projectPath, String localPath, boolean useUpdate, String workspaceName, String userName, Secret password) {
+    public TeamFoundationServerScm(String serverUrl, String projectPath, String cloakPaths, String localPath, boolean useUpdate, String workspaceName, String userName, Secret password) {
         this.serverUrl = serverUrl;
         this.projectPath = projectPath;
         this.useUpdate = useUpdate;
@@ -104,6 +108,17 @@ public class TeamFoundationServerScm extends SCM {
         this.workspaceName = (Util.fixEmptyAndTrim(workspaceName) == null ? "Hudson-${JOB_NAME}-${NODE_NAME}" : workspaceName);
         this.userName = userName;
         this.password = password;
+        this.cloakPaths = splitCloakPaths(cloakPaths);;
+    }
+    
+    private List<String> splitCloakPaths(String cloakPaths) {
+        List<String> cloakPathsList = new ArrayList<String>();
+        if (cloakPaths != null && cloakPaths.trim().length() > 0) {
+            for (String cloakPath : cloakPaths.split(";")) {
+                cloakPathsList.add(cloakPath.trim());
+            }
+        }
+        return cloakPathsList;
     }
 
     /* Migrate legacy data */
@@ -126,6 +141,10 @@ public class TeamFoundationServerScm extends SCM {
 
     public String getProjectPath() {
         return projectPath;
+    }
+
+    public String getCloakPaths() {
+    	return StringUtils.join(cloakPaths, ";\n");
     }
 
     public String getLocalPath() {
@@ -182,7 +201,7 @@ public class TeamFoundationServerScm extends SCM {
     public boolean checkout(AbstractBuild<?, ?> build, Launcher launcher, FilePath workspaceFilePath, BuildListener listener, File changelogFile) throws IOException, InterruptedException {
         Server server = createServer(new TfTool(getDescriptor().getTfExecutable(), launcher, listener, workspaceFilePath), build);
         try {
-            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, Computer.currentComputer()), getProjectPath(build), getLocalPath());
+            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, Computer.currentComputer()), getProjectPath(build), cloakPaths, getLocalPath());
             
             // Check if the configuration has changed
             if (build.getPreviousBuild() != null) {
@@ -204,7 +223,8 @@ public class TeamFoundationServerScm extends SCM {
             final Project project = server.getProject(projectPath);
             recordWorkspaceChangesetVersion(build, listener, project, projectPath, singleVersionSpec);
 
-            CheckoutAction action = new CheckoutAction(workspaceConfiguration.getWorkspaceName(), workspaceConfiguration.getProjectPath(), workspaceConfiguration.getWorkfolder(), isUseUpdate());
+            CheckoutAction action = new CheckoutAction(workspaceConfiguration.getWorkspaceName(), workspaceConfiguration.getProjectPath(), workspaceConfiguration.getCloakPaths(), workspaceConfiguration.getWorkfolder(), isUseUpdate());
+            
             try {
                 List<ChangeSet> list;
                 if (StringUtils.isNotEmpty(singleVersionSpec)) {
@@ -259,7 +279,7 @@ public class TeamFoundationServerScm extends SCM {
         } else {
             Server server = createServer(new TfTool(getDescriptor().getTfExecutable(), launcher, listener, workspace), lastRun);
             try {
-                return (server.getProject(getProjectPath(lastRun)).getDetailedHistory(
+                return (server.getProject(getProjectPath(lastRun), cloakPaths).getDetailedHistory(
                             lastRun.getTimestamp(), 
                             Calendar.getInstance()
                         ).size() > 0);
@@ -382,6 +402,8 @@ public class TeamFoundationServerScm extends SCM {
         public static final Pattern USER_AT_DOMAIN_REGEX = Pattern.compile("^([^\\/\\\\\"\\[\\]:|<>+=;,\\*@]+)@([a-z][a-z0-9.-]+)$", Pattern.CASE_INSENSITIVE);
         public static final Pattern DOMAIN_SLASH_USER_REGEX = Pattern.compile("^([a-z][a-z0-9.-]+)\\\\([^\\/\\\\\"\\[\\]:|<>+=;,\\*@]+)$", Pattern.CASE_INSENSITIVE);
         public static final Pattern PROJECT_PATH_REGEX = Pattern.compile("^\\$\\/.*", Pattern.CASE_INSENSITIVE);
+        public static final Pattern CLOAK_PATHS_REGEX = Pattern.compile("^\\$[^\\$;]+(\\s*;\\s*\\$[^\\$;]+){0,}$", Pattern.CASE_INSENSITIVE);
+        
         private String tfExecutable;
         
         public DescriptorImpl() {
@@ -443,6 +465,12 @@ public class TeamFoundationServerScm extends SCM {
                     "Workspace name is mandatory", value);
         }
         
+        public FormValidation doCloakPathsCheck(@QueryParameter final String value) {
+            return doRegexCheck(new Pattern[]{CLOAK_PATHS_REGEX},
+                    "Each cloak path must begin with '$/'. Multiple paths must be delimited with ';'.", 
+                    null, value );
+        }
+        
         @Override
         public boolean configure(StaplerRequest req, JSONObject formData) throws FormException {
             tfExecutable = Util.fixEmpty(req.getParameter("tfs.tfExecutable").trim());
@@ -494,7 +522,7 @@ public class TeamFoundationServerScm extends SCM {
         Run<?, ?> build = project.getLastBuild();
         final TfTool tool = new TfTool(getDescriptor().getTfExecutable(), localLauncher, listener, workspace);
         final Server server = createServer(tool, build);
-        final Project tfsProject = server.getProject(projectPath);
+        final Project tfsProject = server.getProject(projectPath, cloakPaths);
         try {
             final List<ChangeSet> briefHistory = tfsProject.getBriefHistory(
                         tfsBaseline.changesetVersion,
