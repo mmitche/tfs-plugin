@@ -220,7 +220,7 @@ public class TeamFoundationServerScm extends SCM {
             VariableResolver<String> buildVariableResolver = build.getBuildVariableResolver();
             String singleVersionSpec = buildVariableResolver.resolve(VERSION_SPEC);
             final String projectPath = workspaceConfiguration.getProjectPath();
-            final Project project = server.getProject(projectPath);
+            final Project project = server.getProject(projectPath, workspaceConfiguration.getCloakPaths());
             recordWorkspaceChangesetVersion(build, listener, project, projectPath, singleVersionSpec);
 
             CheckoutAction action = new CheckoutAction(workspaceConfiguration.getWorkspaceName(), workspaceConfiguration.getProjectPath(), workspaceConfiguration.getCloakPaths(), workspaceConfiguration.getWorkfolder(), isUseUpdate());

@@ -276,7 +276,7 @@ public class TeamFoundationServerScmTest {
     }
 
     @Test public void recordWorkspaceChangesetVersion() throws Exception {
-        final TeamFoundationServerScm scm = new TeamFoundationServerScm("serverUrl", "projectPath", "localPath", false, "workspace", "userName", "password");
+        final TeamFoundationServerScm scm = new TeamFoundationServerScm("serverUrl", "projectPath", null, "localPath", false, "workspace", "userName", "password");
         final AbstractBuild build = mock(AbstractBuild.class);
         when(build.getTimestamp()).thenReturn(new GregorianCalendar(2015, 03, 28, 22, 04));
         final BuildListener listener = null;
@@ -293,7 +293,7 @@ public class TeamFoundationServerScmTest {
     }
 
     @Test public void recordWorkspaceChangesetVersionWithSingleVersionSpec() throws Exception {
-        final TeamFoundationServerScm scm = new TeamFoundationServerScm("serverUrl", "projectPath", "localPath", false, "workspace", "userName", "password");
+        final TeamFoundationServerScm scm = new TeamFoundationServerScm("serverUrl", "projectPath", null, "localPath", false, "workspace", "userName", "password");
         final AbstractBuild build = mock(AbstractBuild.class);
         final BuildListener listener = null;
         final Project project = mock(Project.class);
