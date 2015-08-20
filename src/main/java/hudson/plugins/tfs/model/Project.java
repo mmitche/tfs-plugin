@@ -30,6 +30,7 @@ import com.microsoft.tfs.core.clients.versioncontrol.specs.version.ChangesetVers
 import com.microsoft.tfs.core.clients.versioncontrol.specs.version.DateVersionSpec;
 import com.microsoft.tfs.core.clients.versioncontrol.specs.version.LabelVersionSpec;
 import com.microsoft.tfs.core.clients.versioncontrol.specs.version.VersionSpec;
+import com.microsoft.tfs.core.clients.versioncontrol.specs.version.LatestVersionSpec;
 import com.microsoft.tfs.core.clients.webservices.IIdentityManagementService;
 import com.microsoft.tfs.core.clients.webservices.IdentityManagementException;
 import com.microsoft.tfs.core.clients.webservices.IdentityManagementService;
@@ -99,7 +100,7 @@ public class Project {
         try {
             final Changeset[] serverChangesets = vcc.queryHistory(
                     projectPath,
-                    fromVersion != null ? fromVersion : toVersion,
+                    LatestVersionSpec.INSTANCE,
                     0 /* deletionId */,
                     RecursionType.FULL,
                     null /* user */,
@@ -139,7 +140,7 @@ public class Project {
     
     public List<ChangeSet> getDetailedHistory(String singleVersionSpec) {
         final VersionSpec toVersion = VersionSpec.parseSingleVersionFromSpec(singleVersionSpec, null);
-        return getVCCHistory(null, toVersion, true);
+        return getVCCHistory(toVersion, toVersion, true);
     }
 
     /**
