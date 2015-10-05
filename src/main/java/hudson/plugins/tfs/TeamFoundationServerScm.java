@@ -186,6 +186,16 @@ public class TeamFoundationServerScm extends SCM {
     String getProjectPath(Run<?,?> run) {
         return Util.replaceMacro(substituteBuildParameter(run, projectPath), new BuildVariableResolver(run.getParent()));
     }
+	
+	public Collection<String> getCloakPaths(Run<?,?> run) {
+		BuildVariableResolver resolver = new BuildVariableResolver(run.getParent());
+		ArrayList<String> replacedCloakPathsList = new ArrayList<String>();
+		for (String cloakPath : cloakPaths) {
+			replacedCloakPathsList.add(Util.replaceMacro(substituteBuildParameter(run, cloakPath), resolver));
+		}
+		
+    	return replacedCloakPathsList;
+    }
 
     private String substituteBuildParameter(Run<?,?> run, String text) {
         if (run instanceof AbstractBuild<?, ?>){
@@ -201,7 +211,7 @@ public class TeamFoundationServerScm extends SCM {
     public boolean checkout(AbstractBuild<?, ?> build, Launcher launcher, FilePath workspaceFilePath, BuildListener listener, File changelogFile) throws IOException, InterruptedException {
         Server server = createServer(new TfTool(getDescriptor().getTfExecutable(), launcher, listener, workspaceFilePath), build);
         try {
-            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, Computer.currentComputer()), getProjectPath(build), cloakPaths, getLocalPath());
+            WorkspaceConfiguration workspaceConfiguration = new WorkspaceConfiguration(server.getUrl(), getWorkspaceName(build, Computer.currentComputer()), getProjectPath(build), getCloakPaths(build), getLocalPath());
             
             // Check if the configuration has changed
             if (build.getPreviousBuild() != null) {
